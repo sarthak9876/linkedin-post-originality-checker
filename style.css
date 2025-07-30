@@ -1,0 +1,336 @@
+/* LinkedIn Originality Checker - Styles */
+
+/* Button Styles */
+.originality-checker-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #0066cc;
+    color: white;
+    border: none;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-left: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.originality-checker-btn:hover {
+    background: #004499;
+    transform: translateY(-1px);
+}
+
+.originality-checker-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.originality-checker-btn.original {
+    background: #057642;
+}
+
+.originality-checker-btn.original:hover {
+    background: #046135;
+}
+
+.originality-checker-btn.similar {
+    background: #b7950b;
+}
+
+.originality-checker-btn.similar:hover {
+    background: #9c7f0a;
+}
+
+.originality-checker-btn.suspicious {
+    background: #cb4335;
+}
+
+.originality-checker-btn.suspicious:hover {
+    background: #a93529;
+}
+
+.originality-checker-btn.error {
+    background: #555;
+}
+
+/* Spinner Animation */
+.spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Button Container */
+.originality-button-container {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Results Popup */
+.originality-results-popup {
+    position: absolute;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    width: 400px;
+    max-width: 90vw;
+    z-index: 10000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    animation: popupFadeIn 0.2s ease-out;
+}
+
+@keyframes popupFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #eee;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+}
+
+.popup-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.close-btn:hover {
+    background: #eee;
+    color: #333;
+}
+
+.popup-content {
+    padding: 20px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Score Display */
+.score-display {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.score-circle {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: bold;
+    color: white;
+    position: relative;
+}
+
+.score-circle.high {
+    background: linear-gradient(135deg, #057642, #06a85b);
+}
+
+.score-circle.medium {
+    background: linear-gradient(135deg, #b7950b, #d4ac0d);
+}
+
+.score-circle.low {
+    background: linear-gradient(135deg, #cb4335, #e74c3c);
+}
+
+.score-label {
+    font-size: 14px;
+    color: #666;
+    font-weight: 500;
+}
+
+/* Analysis Summary */
+.analysis-summary {
+    margin-bottom: 20px;
+}
+
+.analysis-summary p {
+    margin: 0;
+    color: #555;
+    line-height: 1.5;
+}
+
+/* Matches Section */
+.matches-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+}
+
+.match-item {
+    border: 1px solid #eee;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: #fafafa;
+}
+
+.match-item:last-child {
+    margin-bottom: 0;
+}
+
+.match-preview {
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.match-meta {
+    font-size: 12px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.match-meta strong {
+    color: #333;
+}
+
+.match-meta a {
+    color: #0066cc;
+    text-decoration: none;
+    margin-left: auto;
+}
+
+.match-meta a:hover {
+    text-decoration: underline;
+}
+
+.no-matches {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    padding: 20px;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+    .originality-results-popup {
+        width: 95vw;
+        left: 2.5vw !important;
+    }
+    
+    .score-display {
+        flex-direction: column;
+        text-align: center;
+        gap: 8px;
+    }
+    
+    .match-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .match-meta a {
+        margin-left: 0;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .originality-results-popup {
+        background: #1e1e1e;
+        border-color: #444;
+        color: #e0e0e0;
+    }
+    
+    .popup-header {
+        background: #2a2a2a;
+        border-bottom-color: #444;
+    }
+    
+    .popup-header h3 {
+        color: #e0e0e0;
+    }
+    
+    .close-btn {
+        color: #ccc;
+    }
+    
+    .close-btn:hover {
+        background: #444;
+        color: #fff;
+    }
+    
+    .score-display {
+        background: #2a2a2a;
+    }
+    
+    .analysis-summary p {
+        color: #ccc;
+    }
+    
+    .matches-section h4 {
+        color: #e0e0e0;
+    }
+    
+    .match-item {
+        background: #2a2a2a;
+        border-color: #444;
+    }
+    
+    .match-preview {
+        color: #e0e0e0;
+    }
+    
+    .match-meta {
+        color: #aaa;
+    }
+    
+    .match-meta strong {
+        color: #e0e0e0;
+    }
+}
