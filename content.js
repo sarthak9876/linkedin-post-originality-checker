@@ -11,6 +11,19 @@ class LinkedInOriginalityChecker {
         this.loadSettings();
         this.observeNewPosts();
         this.processExistingPosts();
+        this.setupMessageListener();
+    }
+
+    setupMessageListener() {
+        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+            if (request.action === 'toggleEnabled') {
+                this.isEnabled = request.enabled;
+                if (this.isEnabled) {
+                    this.processExistingPosts();
+                }
+                sendResponse({ success: true });
+            }
+        });
     }
 
     async loadSettings() {
@@ -95,6 +108,40 @@ class LinkedInOriginalityChecker {
                 if (authorElement) break;
             }
 
+            // Extract post URL
+            let postUrl = '';
+            // Try to get the post URL from various possible elements
+            const possibleLinkSelectors = [
+                'a[data-tracking-control-name="main_feed_detail_share"]',
+                '.feed-shared-actor__meta a',
+                '.feed-shared-actor__container a',
+                '.feed-shared-actor__meta-link',
+                '.feed-shared-update-v2__meta-link',
+                '.update-components-actor__meta-link'
+            ];
+
+            for (const selector of possibleLinkSelectors) {
+                const linkElement = postElement.querySelector(selector);
+                if (linkElement && linkElement.href) {
+                    postUrl = linkElement.href;
+                    // Clean up the URL to get the permanent post URL
+                    const urlMatch = postUrl.match(/(https:\/\/[^\/]+\/(?:posts|feed)\/[^?#]+)/);
+                    if (urlMatch) {
+                        postUrl = urlMatch[1];
+                        break;
+                    }
+                }
+            }
+
+            // If we couldn't find a specific post URL, try to get it from the post's data attributes
+            if (!postUrl) {
+                const urn = postElement.getAttribute('data-urn');
+                if (urn) {
+                    const activityId = urn.split(':').pop();
+                    postUrl = `https://www.linkedin.com/feed/update/${activityId}/`;
+                }
+            }
+
             // Extract timestamp
             const timeElement = postElement.querySelector('time, .feed-shared-actor__sub-description time');
 
@@ -102,7 +149,7 @@ class LinkedInOriginalityChecker {
                 text: textElement.innerText.trim(),
                 author: authorElement ? authorElement.innerText.trim() : 'Unknown',
                 timestamp: timeElement ? timeElement.getAttribute('datetime') || timeElement.innerText : 'Unknown',
-                url: window.location.href,
+                url: postUrl || window.location.href, // Fallback to current page URL if no specific post URL found
                 element: postElement
             };
         } catch (error) {
@@ -143,6 +190,12 @@ class LinkedInOriginalityChecker {
     }
 
     async checkOriginality(postData, button) {
+        if (!postData || !postData.text) {
+            console.error('Invalid post data:', postData);
+            this.showError(button, 'Invalid post data');
+            return;
+        }
+
         button.disabled = true;
         button.innerHTML = `
             <div class="spinner"></div>
@@ -150,16 +203,58 @@ class LinkedInOriginalityChecker {
         `;
 
         try {
-            // Send message to background script for analysis
-            const response = await chrome.runtime.sendMessage({
-                action: 'analyzePost',
-                data: postData
-            });
+            // Validate post data before sending
+            const validatedData = {
+                text: postData.text.trim(),
+                author: postData.author || 'Unknown',
+                url: postData.url || window.location.href,
+                timestamp: postData.timestamp || new Date().toISOString()
+            };
 
-            this.displayResults(postData, response, button);
+            console.log('Sending post data for analysis:', validatedData);
+            
+            // Send message to background script for analysis
+            const response = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({
+                    action: 'analyzePost',
+                    data: validatedData
+                }, response => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                        return;
+                    }
+                    resolve(response);
+                });
+            });
+            
+            console.log('Received response:', response);
+            
+            if (!response) {
+                throw new Error('No response received from background script');
+            }
+
+            // Validate response before displaying results
+            if (typeof response.originalityScore === 'undefined') {
+                throw new Error('Invalid response format from background script');
+            }
+
+            this.displayResults(validatedData, response, button);
         } catch (error) {
             console.error('Error checking originality:', error);
-            this.showError(button, 'Error occurred while checking');
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                postData: postData
+            });
+            
+            let errorMessage = 'Error occurred while checking';
+            if (error.message.includes('runtime.sendMessage')) {
+                errorMessage = 'Extension communication error';
+            } else if (error.message.includes('Invalid response')) {
+                errorMessage = 'Invalid analysis results';
+            }
+            
+            this.showError(button, errorMessage);
         }
     }
 
