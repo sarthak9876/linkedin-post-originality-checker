@@ -72,7 +72,7 @@ A browser extension that helps detect duplicate and copied content on LinkedIn p
 ## 🖼️ How It Looks
 
 <p align="center">
-  <img src="/Users/sarthak.vaish/Desktop/linkedin-post-originality-checker/icons/Linkedin-post-originality.png" alt="LinkedIn Originality Checker UI Example" width="500"/>
+  <img src="/icons/Linkedin-post-originality.png" alt="LinkedIn Originality Checker UI Example" width="500"/>
 </p>
 
 *Above: Example of the extension showing similar posts and originality scores in a LinkedIn feed.*
