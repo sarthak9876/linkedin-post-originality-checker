@@ -86,70 +86,80 @@ class LinkedInOriginalityChecker {
                 '.attributed-text-segment-list__content',
                 '.feed-shared-text__text-view'
             ];
-
             let textElement = null;
             for (const selector of textSelectors) {
                 textElement = postElement.querySelector(selector);
                 if (textElement) break;
             }
-
             if (!textElement) return null;
 
-            // Extract author information
+            // Extract author information robustly
+            let author = 'Unknown';
             const authorSelectors = [
                 '.feed-shared-actor__name',
                 '.feed-shared-actor__title',
-                '[data-test-id="main-feed-activity-card"] .feed-shared-actor__name'
+                '[data-test-id="main-feed-activity-card"] .feed-shared-actor__name',
+                '.update-components-actor__name',
+                '.actor-name',
+                '.feed-shared-actor__meta a'
             ];
-
-            let authorElement = null;
             for (const selector of authorSelectors) {
-                authorElement = postElement.querySelector(selector);
-                if (authorElement) break;
+                const el = postElement.querySelector(selector);
+                if (el && el.innerText.trim()) {
+                    author = el.innerText.trim();
+                    break;
+                }
             }
 
-            // Extract post URL
+            // Extract canonical post URL
             let postUrl = '';
             // Try to get the post URL from various possible elements
             const possibleLinkSelectors = [
                 'a[data-tracking-control-name="main_feed_detail_share"]',
+                'a[href*="/feed/update/"]',
+                'a[href*="/posts/"]',
                 '.feed-shared-actor__meta a',
                 '.feed-shared-actor__container a',
                 '.feed-shared-actor__meta-link',
                 '.feed-shared-update-v2__meta-link',
                 '.update-components-actor__meta-link'
             ];
-
             for (const selector of possibleLinkSelectors) {
                 const linkElement = postElement.querySelector(selector);
                 if (linkElement && linkElement.href) {
-                    postUrl = linkElement.href;
-                    // Clean up the URL to get the permanent post URL
-                    const urlMatch = postUrl.match(/(https:\/\/[^\/]+\/(?:posts|feed)\/[^?#]+)/);
+                    // Prefer canonical LinkedIn post URLs
+                    const urlMatch = linkElement.href.match(/https:\/\/www\.linkedin\.com\/feed\/update\/[^/?#]+/);
                     if (urlMatch) {
-                        postUrl = urlMatch[1];
+                        postUrl = urlMatch[0];
+                        break;
+                    }
+                    // Fallback to any LinkedIn post or activity URL
+                    const altMatch = linkElement.href.match(/https:\/\/www\.linkedin\.com\/(posts|feed\/update)\/[^/?#]+/);
+                    if (altMatch) {
+                        postUrl = altMatch[0];
                         break;
                     }
                 }
             }
-
             // If we couldn't find a specific post URL, try to get it from the post's data attributes
             if (!postUrl) {
                 const urn = postElement.getAttribute('data-urn');
-                if (urn) {
+                if (urn && urn.includes('activity')) {
                     const activityId = urn.split(':').pop();
-                    postUrl = `https://www.linkedin.com/feed/update/${activityId}/`;
+                    postUrl = `https://www.linkedin.com/feed/update/urn:li:activity:${activityId}/`;
                 }
             }
-
+            // Fallback to current page URL if no specific post URL found
+            if (!postUrl) {
+                postUrl = window.location.href;
+            }
             // Extract timestamp
             const timeElement = postElement.querySelector('time, .feed-shared-actor__sub-description time');
-
             return {
                 text: textElement.innerText.trim(),
-                author: authorElement ? authorElement.innerText.trim() : 'Unknown',
+                author,
                 timestamp: timeElement ? timeElement.getAttribute('datetime') || timeElement.innerText : 'Unknown',
-                url: postUrl || window.location.href, // Fallback to current page URL if no specific post URL found
+                url: postUrl,
                 element: postElement
             };
         } catch (error) {
@@ -205,30 +215,38 @@ class LinkedInOriginalityChecker {
         try {
             // Validate post data before sending
             const validatedData = {
-                text: postData.text.trim(),
+                text: postData.text ? postData.text.trim() : '',
                 author: postData.author || 'Unknown',
                 url: postData.url || window.location.href,
                 timestamp: postData.timestamp || new Date().toISOString()
             };
 
+            if (!validatedData.text) {
+                throw new Error('No post text to analyze');
+            }
+
             console.log('Sending post data for analysis:', validatedData);
-            
+
             // Send message to background script for analysis
             const response = await new Promise((resolve, reject) => {
-                chrome.runtime.sendMessage({
-                    action: 'analyzePost',
-                    data: validatedData
-                }, response => {
-                    if (chrome.runtime.lastError) {
-                        reject(new Error(chrome.runtime.lastError.message));
-                        return;
-                    }
-                    resolve(response);
-                });
+                try {
+                    chrome.runtime.sendMessage({
+                        action: 'analyzePost',
+                        data: validatedData
+                    }, response => {
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                            return;
+                        }
+                        resolve(response);
+                    });
+                } catch (err) {
+                    reject(new Error('Failed to send message to background script: ' + err.message));
+                }
             });
-            
+
             console.log('Received response:', response);
-            
+
             if (!response) {
                 throw new Error('No response received from background script');
             }
@@ -246,14 +264,16 @@ class LinkedInOriginalityChecker {
                 stack: error.stack,
                 postData: postData
             });
-            
+
             let errorMessage = 'Error occurred while checking';
-            if (error.message.includes('runtime.sendMessage')) {
+            if (error.message && error.message.includes('Could not establish connection')) {
                 errorMessage = 'Extension communication error';
-            } else if (error.message.includes('Invalid response')) {
+            } else if (error.message && error.message.includes('Invalid response')) {
                 errorMessage = 'Invalid analysis results';
+            } else if (error.message && error.message.includes('No post text')) {
+                errorMessage = 'No post text to analyze';
             }
-            
+
             this.showError(button, errorMessage);
         }
     }
@@ -295,15 +315,27 @@ class LinkedInOriginalityChecker {
         
         let matchesHtml = '';
         if (results.matches && results.matches.length > 0) {
-            matchesHtml = results.matches.map(match => `
+            matchesHtml = results.matches.map(match => {
+                // Fallbacks for author and url
+                const author = match.author && match.author !== 'Unknown' ? match.author : (match.source === 'web-search' ? 'Web Result' : 'Unknown');
+                let url = match.url;
+                // Try to ensure url is a canonical LinkedIn post URL if possible
+                if (url && url.includes('linkedin.com') && !url.includes('/feed/update/')) {
+                    const activityId = url.match(/activity:(\d+)/);
+                    if (activityId) {
+                        url = `https://www.linkedin.com/feed/update/urn:li:activity:${activityId[1]}/`;
+                    }
+                }
+                return `
                 <div class="match-item">
                     <div class="match-preview">${this.truncate(match.text, 100)}</div>
                     <div class="match-meta">
-                        <strong>${match.author}</strong> • ${match.similarity}% similar
-                        ${match.url ? `<a href="${match.url}" target="_blank">View Post</a>` : ''}
+                        <strong>${author}</strong> • ${match.similarity}% similar
+                        ${url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">View Post</a>` : ''}
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         } else {
             matchesHtml = '<div class="no-matches">No similar posts found</div>';
         }

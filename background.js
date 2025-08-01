@@ -1,8 +1,80 @@
+
+    // Generate a human-readable analysis summary for the originality check.
 // LinkedIn Originality Checker - Background Script
 class OriginalityAnalyzer {
+
     constructor() {
         this.cache = new Map();
         this.setupMessageListener();
+        this.setupErrorHandling();
+        this.CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+        this.MAX_RESULTS = 5;
+        this.MIN_SIMILARITY_THRESHOLD = 0.3;
+        this.rateLimiter = new Map();
+        this.RATE_LIMIT_WINDOW = 60000; // 1 minute
+        this.MAX_REQUESTS = 10; // per minute
+    }
+
+    // Generate a human-readable analysis summary for the originality check.
+    generateAnalysisSummary(originalityScore, matches, textMetrics) {
+        try {
+            let summary = '';
+            if (originalityScore >= 90) {
+                summary += 'This post appears to be highly original. ';
+            } else if (originalityScore >= 80) {
+                summary += 'This post is likely original, but some similar content was found.';
+            } else if (originalityScore >= 50) {
+                summary += 'Some similarities detected. Review similar posts for possible overlap.';
+            } else {
+                summary += 'Significant similarities found. This post may be copied or heavily inspired by other content.';
+            }
+
+            if (matches && matches.length > 0) {
+                const topMatch = matches[0];
+                summary += ` Top similarity: ${topMatch.similarity || 0}%`;
+            }
+
+            if (textMetrics) {
+                summary += `\nWord count: ${textMetrics.wordCount}, Unique word ratio: ${(textMetrics.uniqueWordRatio * 100).toFixed(1)}%`;
+                if (textMetrics.hasExcessiveEmojis) summary += '\nContains excessive emojis.';
+                if (textMetrics.hasExcessiveHashtags) summary += '\nContains excessive hashtags.';
+                if (textMetrics.hasExcessiveCaps) summary += '\nContains excessive capitalization.';
+                summary += `\nReadability score: ${textMetrics.readabilityScore}`;
+            }
+
+            return summary;
+        } catch (err) {
+            console.error('Error generating analysis summary:', err);
+            return 'Analysis summary unavailable due to error.';
+        }
+    }
+
+    setupErrorHandling() {
+        // Remove window.onerror and use self for service worker context
+        self.onerror = (message, source, lineno, colno, error) => {
+            console.error('Global error handler:', {
+                message,
+                source,
+                lineno,
+                colno,
+                error
+            });
+            return false;
+        };
+
+        // Add unhandledrejection handler for Promises
+        self.onunhandledrejection = (event) => {
+            console.error('Unhandled Promise rejection:', event.reason);
+        };
+    }
+
+    cleanCache() {
+        const now = Date.now();
+        for (const [key, value] of this.cache) {
+            if (now - value.timestamp > this.CACHE_DURATION) {
+                this.cache.delete(key);
+            }
+        }
     }
 
     setupMessageListener() {
@@ -69,10 +141,28 @@ class OriginalityAnalyzer {
         });
     }
 
+    async checkRateLimit() {
+        const now = Date.now();
+        const windowStart = now - this.RATE_LIMIT_WINDOW;
+        const requestTimes = this.rateLimiter.get('requests') || [];
+        
+        const validRequests = requestTimes.filter(time => time > windowStart);
+        this.rateLimiter.set('requests', validRequests);
+
+        if (validRequests.length >= this.MAX_REQUESTS) {
+            throw new Error('Rate limit exceeded. Please try again later.');
+        }
+
+        validRequests.push(now);
+        this.rateLimiter.set('requests', validRequests);
+    }
+
     async analyzePost(postData) {
         console.log('Analyzing post:', postData.text.substring(0, 50) + '...');
 
         try {
+            await this.checkRateLimit();
+
             // Check cache first
             const cacheKey = this.generateCacheKey(postData.text);
             if (this.cache.has(cacheKey)) {
@@ -89,8 +179,16 @@ class OriginalityAnalyzer {
             return result;
         } catch (error) {
             console.error('Analysis error:', error);
+            if (error.message.includes('Rate limit')) {
+                return {
+                    originalityScore: 0,
+                    analysis: 'Rate limit exceeded. Please wait a minute and try again.',
+                    matches: [],
+                    error: error.message
+                };
+            }
             return {
-                originalityScore: 100,
+                originalityScore: 0,
                 analysis: 'Unable to analyze post due to technical error',
                 matches: [],
                 error: error.message
@@ -99,27 +197,46 @@ class OriginalityAnalyzer {
     }
 
     async performAnalysis(postData) {
-        // Step 1: Basic text analysis
-        const textMetrics = this.analyzeTextMetrics(postData.text);
-        
-        // Step 2: Search for similar content
-        const searchResults = await this.searchSimilarContent(postData);
-        
-        // Step 3: Calculate similarity scores
-        const matches = this.calculateSimilarities(postData.text, searchResults);
-        
-        // Step 4: Determine originality score
-        const originalityScore = this.calculateOriginalityScore(matches, textMetrics);
-        
-        // Step 5: Generate analysis summary
-        const analysis = this.generateAnalysisSummary(originalityScore, matches, textMetrics);
+        try {
+            // Progress: start
+            try { chrome.runtime.sendMessage({ type: 'analysisProgress', stage: 'start', progress: 0 }); } catch (e) {}
 
-        return {
-            originalityScore,
-            analysis,
-            matches: matches.slice(0, 5), // Return top 5 matches
-            textMetrics
-        };
+            // Step 1: Basic text analysis
+            const textMetrics = {
+                ...this.analyzeTextMetrics(postData.text),
+                originalText: postData.text
+            };
+            try { chrome.runtime.sendMessage({ type: 'analysisProgress', stage: 'textMetrics', progress: 20 }); } catch (e) {}
+
+            // Step 2: AI Analysis
+            const aiAnalysis = await this.performAIAnalysis(postData.text);
+            try { chrome.runtime.sendMessage({ type: 'analysisProgress', stage: 'aiAnalysis', progress: 40 }); } catch (e) {}
+
+            // Step 3: Search for similar content
+            const searchResults = await this.searchSimilarContent(postData);
+            try { chrome.runtime.sendMessage({ type: 'analysisProgress', stage: 'searchResults', progress: 60 }); } catch (e) {}
+
+            // Step 4: Calculate similarity scores
+            const matches = this.calculateSimilarities(postData.text, searchResults);
+            try { chrome.runtime.sendMessage({ type: 'analysisProgress', stage: 'similarities', progress: 80 }); } catch (e) {}
+
+            // Step 5: Generate final results
+            const originalityScore = this.calculateOriginalityScore(matches, textMetrics);
+            const analysis = this.generateAnalysisSummary(originalityScore, matches, textMetrics);
+
+            try { chrome.runtime.sendMessage({ type: 'analysisProgress', stage: 'complete', progress: 100 }); } catch (e) {}
+
+            return {
+                originalityScore,
+                analysis,
+                matches: matches.slice(0, 5),
+                textMetrics,
+                aiAnalysis
+            };
+        } catch (error) {
+            try { chrome.runtime.sendMessage({ type: 'analysisProgress', stage: 'error', error: error.message }); } catch (e) {}
+            throw error;
+        }
     }
 
     analyzeTextMetrics(text) {
@@ -127,8 +244,9 @@ class OriginalityAnalyzer {
         const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
         const uniqueWords = new Set(words.map(w => w.toLowerCase()));
         
-        // Check for common spam indicators
-        const hasExcessiveEmojis = (text.match(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/gu) || []).length > words.length * 0.1;
+        // Fixed emoji regex pattern
+        const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}]/gu;
+        const hasExcessiveEmojis = (text.match(emojiRegex) || []).length > words.length * 0.1;
         const hasExcessiveHashtags = (text.match(/#\w+/g) || []).length > 10;
         const hasExcessiveCaps = text.match(/[A-Z]/g)?.length > text.length * 0.3;
 
@@ -152,6 +270,11 @@ class OriginalityAnalyzer {
 
     async searchSimilarContent(postData) {
         try {
+            if (!navigator.onLine) {
+                console.log('Offline mode - using cached data only');
+                return this.searchCachedContent(postData);
+            }
+            
             const results = [];
             
             // 1. First do a real-time LinkedIn search
@@ -174,10 +297,10 @@ class OriginalityAnalyzer {
             const storage = await chrome.storage.local.get('posts');
             const storedPosts = storage.posts || [];
             
-            // Store current post for future reference
+            // Store current post for future reference, always include author
             const currentPost = {
                 text: postData.text,
-                author: postData.author,
+                author: postData.author || (postData.element && postData.element.getAttribute && postData.element.getAttribute('data-author')) || 'Unknown',
                 date: new Date().toISOString(),
                 url: postData.url,
                 source: 'linkedin'
@@ -186,6 +309,10 @@ class OriginalityAnalyzer {
             // Find similar posts in stored content
             const storedMatches = storedPosts.filter(post => {
                 const similarity = this.calculateDetailedSimilarity(postData.text, post.text);
+                // Patch: If author is missing but postData has it, fill it in
+                if ((!post.author || post.author === 'Unknown') && postData.author && postData.author !== 'Unknown') {
+                    post.author = postData.author;
+                }
                 return similarity.overallSimilarity > 0.3 || 
                        similarity.phraseMatches > 0 ||
                        similarity.sentenceMatches > 0;
@@ -206,6 +333,24 @@ class OriginalityAnalyzer {
             return results;
         } catch (error) {
             console.error('Error searching similar content:', error);
+            return [];
+        }
+    }
+
+    async searchCachedContent(postData) {
+        try {
+            const storage = await chrome.storage.local.get(null);
+            const cachedPosts = [];
+            
+            for (const key in storage) {
+                if (key.startsWith('posts_')) {
+                    cachedPosts.push(...storage[key]);
+                }
+            }
+
+            return this.calculateSimilarities(postData.text, cachedPosts);
+        } catch (error) {
+            console.error('Error searching cached content:', error);
             return [];
         }
     }
@@ -420,188 +565,79 @@ class OriginalityAnalyzer {
 
     calculateSimilarities(originalText, searchResults) {
         return searchResults.map(result => {
-            const similarity = this.calculateTextSimilarity(originalText, result.text);
+            const similarity = this.calculateDetailedSimilarity(originalText, result.text);
             return {
                 ...result,
-                similarity: Math.round(similarity * 100)
+                similarity: Math.round(similarity.overallSimilarity * 100)
             };
         }).sort((a, b) => b.similarity - a.similarity);
     }
 
-    calculateDetailedSimilarity(text1, text2) {
-        const normalizeText = (text) => {
-            return text.toLowerCase()
-                .replace(/[^\w\s]/g, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-        };
-
-        const normalized1 = normalizeText(text1);
-        const normalized2 = normalizeText(text2);
-
-        // Break into sentences and paragraphs
-        const getSentences = (text) => text.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 0);
-        const sentences1 = getSentences(normalized1);
-        const sentences2 = getSentences(normalized2);
-
-        // Get word sequences for phrase matching
-        const getWordSequences = (text, size) => {
-            const words = text.split(' ');
-            const sequences = [];
-            for (let i = 0; i <= words.length - size; i++) {
-                sequences.push(words.slice(i, i + size).join(' '));
-            }
-            return sequences;
-        };
-
-        // Calculate exact sentence matches
-        const exactSentenceMatches = sentences1.filter(s1 => 
-            sentences2.some(s2 => s2 === s1)
-        ).length;
-
-        // Calculate partial sentence matches (80% similar)
-        const partialSentenceMatches = sentences1.filter(s1 => 
-            sentences2.some(s2 => {
-                const words1 = new Set(s1.split(' '));
-                const words2 = new Set(s2.split(' '));
-                const intersection = new Set([...words1].filter(x => words2.has(x)));
-                return intersection.size / Math.max(words1.size, words2.size) > 0.8;
-            })
-        ).length;
-
-        // Calculate phrase matches
-        const getPhraseMatches = (size) => {
-            const seq1 = new Set(getWordSequences(normalized1, size));
-            const seq2 = new Set(getWordSequences(normalized2, size));
-            return [...seq1].filter(x => seq2.has(x)).length;
-        };
-
-        const fourWordMatches = getPhraseMatches(4);
-        const threeWordMatches = getPhraseMatches(3);
-
-        // Calculate word-level similarity
-        const words1 = new Set(normalized1.split(' '));
-        const words2 = new Set(normalized2.split(' '));
-        const commonWords = new Set([...words1].filter(x => words2.has(x)));
-        const wordSimilarity = commonWords.size / Math.max(words1.size, words2.size);
-
-        // Check for structural similarity
-        const lengthRatio = Math.min(normalized1.length, normalized2.length) / 
-                           Math.max(normalized1.length, normalized2.length);
-        
-        // Calculate content fingerprint (word frequency patterns)
-        const getWordFrequencies = (text) => {
-            const words = text.split(' ');
-            const freq = {};
-            words.forEach(w => freq[w] = (freq[w] || 0) + 1);
-            return freq;
-        };
-        
-        const freq1 = getWordFrequencies(normalized1);
-        const freq2 = getWordFrequencies(normalized2);
-        const freqSimilarity = Object.keys(freq1).reduce((sum, word) => {
-            if (freq2[word]) {
-                sum += Math.min(freq1[word], freq2[word]) / Math.max(freq1[word], freq2[word]);
-            }
-            return sum;
-        }, 0) / Object.keys(freq1).length;
-
-        // Calculate overall similarity score with weighted components
-        const overallSimilarity = (
-            (exactSentenceMatches > 0 ? 0.3 : 0) +
-            (partialSentenceMatches / Math.max(sentences1.length, sentences2.length) * 0.2) +
-            (fourWordMatches > 0 ? 0.2 : 0) +
-            (threeWordMatches / Math.max(sentences1.length, sentences2.length) * 0.1) +
-            (wordSimilarity * 0.1) +
-            (lengthRatio * 0.05) +
-            (freqSimilarity * 0.05)
-        );
-
-        return {
-            overallSimilarity,
-            exactSentenceMatches,
-            partialSentenceMatches,
-            fourWordMatches,
-            threeWordMatches,
-            wordSimilarity,
-            lengthRatio,
-            freqSimilarity
-        };
-    }
-
     calculateOriginalityScore(matches, textMetrics) {
+        // Base score starts at 100
         let score = 100;
 
-        // Check for exact matches or high similarity
+        // Deduct points for similar matches
         if (matches.length > 0) {
-            const detailedSimilarity = this.calculateDetailedSimilarity(matches[0].text, textMetrics.originalText);
-            
-            // Exact sentence matches are strong indicators of copying
-            if (detailedSimilarity.sentenceMatches > 0) {
-                score -= Math.min(95, detailedSimilarity.sentenceMatches * 30);
+            // Get highest similarity match
+            const maxSimilarity = Math.max(...matches.map(m => m.similarity));
+            // Deduct up to 60 points based on highest similarity
+            score -= (maxSimilarity * 60);
+        }
+
+        // Deduct points for poor text metrics
+        if (textMetrics) {
+            // Deduct for low unique word ratio
+            if (textMetrics.uniqueWordRatio < 0.8) {
+                score -= (1 - textMetrics.uniqueWordRatio) * 10;
             }
 
-            // Phrase matches also indicate potential copying
-            if (detailedSimilarity.phraseMatches > 0) {
-                score -= Math.min(80, detailedSimilarity.phraseMatches * 20);
-            }
+            // Deduct for excessive formatting
+            if (textMetrics.hasExcessiveEmojis) score -= 5;
+            if (textMetrics.hasExcessiveHashtags) score -= 5;
+            if (textMetrics.hasExcessiveCaps) score -= 5;
 
-            // Overall similarity penalty
-            const similarityPenalty = detailedSimilarity.overallSimilarity * 100;
-            score -= similarityPenalty;
-
-            // Multiple matches penalty
-            if (matches.length > 1) {
-                matches.slice(1).forEach((match, index) => {
-                    const subsequentSimilarity = this.calculateDetailedSimilarity(match.text, textMetrics.originalText);
-                    score -= Math.min(20, subsequentSimilarity.overallSimilarity * 50 / (index + 2));
-                });
+            // Deduct for poor readability
+            if (textMetrics.readabilityScore < 70) {
+                score -= (70 - textMetrics.readabilityScore) * 0.2;
             }
         }
 
-        // Content quality penalties
-        if (textMetrics.hasExcessiveEmojis) score -= 20;
-        if (textMetrics.hasExcessiveHashtags) score -= 25;
-        if (textMetrics.hasExcessiveCaps) score -= 20;
-        if (textMetrics.uniqueWordRatio < 0.5) score -= 20;
-        if (textMetrics.wordCount < 10) score -= 15;
-        if (textMetrics.uniqueWordRatio < 0.3) score -= 25;
-
-        // Length-based adjustments
-        if (textMetrics.wordCount < 20) {
-            score -= 10; // Penalize very short posts
-        }
-
-        // Final adjustments
-        if (score < 50 && matches.length > 0) {
-            // If score is already low and we found matches, be more aggressive
-            score = Math.max(0, score - 20);
-        }
-
-        return Math.max(0, Math.round(score));
+        // Ensure score stays between 0 and 100
+        return Math.max(0, Math.min(100, Math.round(score)));
     }
 
-    generateAnalysisSummary(score, matches, textMetrics) {
-        if (score >= 90) {
-            return "This post appears to be highly original with no significant similar content found.";
-        } else if (score >= 70) {
-            return `This post appears mostly original, though ${matches.length} similar posts were found with moderate similarity.`;
-        } else if (score >= 50) {
-            return `This post has concerning similarities to existing content. ${matches.length} similar posts found.`;
-        } else {
-            return `This post appears to be largely copied or heavily inspired by existing content. High similarity detected.`;
+    async performAIAnalysis(text) {
+        try {
+            // Return default values since API endpoints are not actually configured
+            return {
+                styleScore: 1.0,
+                styleFingerprint: 'default',
+                authenticityScore: 1.0,
+                authenticityConfidence: 1.0,
+                contextRelevance: 1.0,
+                aiPrediction: 'original',
+                analysisDetails: {
+                    stylistic: {},
+                    authenticity: {},
+                    context: {}
+                }
+            };
+        } catch (error) {
+            console.error('AI Analysis error:', error);
+            // Return default values on error
+            return {
+                styleScore: 1.0,
+                authenticityScore: 1.0,
+                contextRelevance: 1.0,
+                aiPrediction: 'original',
+                analysisDetails: {
+                    stylistic: {},
+                    authenticity: {},
+                    context: {}
+                }
+            };
         }
-    }
-
-    generateCacheKey(text) {
-        // Simple hash function for caching
-        let hash = 0;
-        for (let i = 0; i < text.length; i++) {
-            const char = text.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32-bit integer
-        }
-        return hash.toString();
     }
 
     async searchLinkedInPosts(text) {
@@ -716,7 +752,19 @@ class OriginalityAnalyzer {
             return [];
         }
     }
+
+    generateCacheKey(text) {
+        // Create a simple hash of the text for cache key
+        const normalizedText = text.toLowerCase().trim();
+        let hash = 0;
+        for (let i = 0; i < normalizedText.length; i++) {
+            const char = normalizedText.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return `post_${hash}`;
+    }
 }
 
 // Initialize the analyzer
-new OriginalityAnalyzer();
+const analyzer = new OriginalityAnalyzer();

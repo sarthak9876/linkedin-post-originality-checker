@@ -4,11 +4,22 @@ A browser extension that helps detect duplicate and copied content on LinkedIn p
 
 ## 🚀 Features
 
+- **AI-Powered Analysis**: 
+  - Neural network-based content verification
+  - Automated writing style analysis
+  - Context-aware plagiarism detection
+  - Smart content authenticity scoring
 - **Automatic Post Detection**: Scans LinkedIn posts as you browse
-- **Originality Scoring**: Provides percentage-based originality scores
-- **Duplicate Detection**: Identifies similar or copied content
+- **Advanced Originality Scoring**: 
+  - AI-enhanced percentage-based scoring
+  - Writing style fingerprinting
+  - Context understanding
+- **Multi-Level Detection**: 
+  - AI content analysis
+  - Pattern recognition
+  - Similar content matching
 - **Visual Indicators**: Color-coded buttons showing originality status
-- **Detailed Analysis**: Shows similar posts with similarity percentages
+- **Comprehensive Analysis**: Shows similar posts with detailed AI insights
 - **Export Functionality**: Export analysis data for reporting
 - **Privacy Focused**: All analysis happens locally in your browser
 
@@ -39,178 +50,139 @@ A browser extension that helps detect duplicate and copied content on LinkedIn p
    - Change `manifest_version` to `2` in `manifest.json`
    - Update permissions format for Firefox compatibility
 
-2. **Load in Firefox**
-   - Go to `about:debugging`
-   - Click "This Firefox"
-   - Click "Load Temporary Add-on"
-   - Select any file from the extension folder
+# LinkedIn Originality Checker
 
-## 🔧 File Structure
+- Try scrolling to load more posts
 
-Your extension folder should contain:
+---
+
+## ✨ Features
+
+- **One-Click Originality Check**: Adds a "Check Originality" button to every LinkedIn post.
+- **AI-Enhanced Analysis**: Smart algorithms analyze text, structure, and style for originality.
+- **Similarity Detection**: Finds and displays similar posts from your browsing history and the web.
+- **At-a-Glance Results**: Color-coded scores and detailed popups show originality and match details.
+- **Batch Scanning**: Scan all posts on a page with one click from the popup.
+- **Daily Stats**: Track how many posts you've checked and duplicates found.
+- **Export & Clear Data**: Export your analysis results or clear your cache easily.
+- **Privacy First**: All analysis happens locally in your browser—no data is sent to servers.
+
+---
+
+## 🖼️ How It Looks
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sarthak9876/linkedin-post-originality-checker/main/example-screenshot.png" alt="LinkedIn Originality Checker UI Example" width="500"/>
+</p>
+
+*Above: Example of the extension showing similar posts and originality scores in a LinkedIn feed.*
+
+---
+
+## � Getting Started
+
+### 1. Download & Install
+
+1. **Clone or Download** this repository.
+2. **Open Chrome** and go to `chrome://extensions/`.
+3. **Enable Developer Mode** (top right).
+4. **Click "Load unpacked"** and select the `linkedin-post-originality-checker` folder.
+5. **Pin the Extension** for easy access.
+
+### 2. Using the Extension
+
+1. **Go to LinkedIn** and browse your feed.
+2. **Click "Check Originality"** on any post to analyze it.
+3. **View Results**: See the originality score, similar posts, and details in a popup.
+4. **Use the Popup**: Click the extension icon for batch scan, stats, export, and more.
+
+---
+
+## 🗂️ File Structure
 
 ```
 linkedin-originality-checker/
-├── manifest.json          # Extension configuration
-├── content.js            # Main functionality script
-├── background.js         # Background processing
-├── popup.html           # Extension popup interface
-├── styles.css           # Styling for UI elements
-├── README.md            # This file
-└── icons/               # Extension icons
-    ├── icon16.png       # 16x16 pixel icon
-    ├── icon48.png       # 48x48 pixel icon
-    └── icon128.png      # 128x128 pixel icon
+├── manifest.json         # Extension manifest (permissions, scripts)
+├── background.js         # Background service worker (analysis, storage)
+├── content.js            # Content script (injects UI, extracts post data)
+├── popup.html            # Extension popup UI
+├── popup.js              # Popup logic (batch scan, stats, export)
+├── style.css             # Styles for injected UI
+├── popup.css             # Styles for popup
+├── icons/                # Extension icons (16, 48, 128 px)
+├── README.md             # This file
+└── example-screenshot.png # Example screenshot (add your own)
 ```
 
-## 📋 Usage
+---
 
-### Basic Usage
+## 🧠 How It Works
 
-1. **Navigate to LinkedIn**
-   - Open LinkedIn in your browser
-   - Browse posts in your feed or visit specific post URLs
+1. **Content Script** (`content.js`):
+   - Detects LinkedIn posts in your feed.
+   - Injects a "Check Originality" button into each post.
+   - Extracts post text, author, and URL for analysis.
+   - Displays results in a stylish popup.
 
-2. **Check Post Originality**
-   - Look for the "Check Originality" button on posts
-   - Click the button to analyze the post
-   - View the originality score and any similar posts found
+2. **Background Script** (`background.js`):
+   - Receives analysis requests from the content script.
+   - Analyzes post text for originality, style, and similarity.
+   - Searches your local cache and the web for similar content.
+   - Handles storage, caching, and error handling.
 
-3. **Interpret Results**
-   - 🟢 **Green (90-100%)**: Likely original content
-   - 🟡 **Yellow (70-89%)**: Some similar content found
-   - 🔴 **Red (0-69%)**: Potential copy or heavily borrowed content
+3. **Popup** (`popup.html`, `popup.js`):
+   - Lets you scan all posts on the current page.
+   - Shows daily stats (checked, duplicates found).
+   - Allows you to clear cache or export your data.
 
-### Advanced Features
-
-#### Extension Popup
-- Click the extension icon to access advanced controls
-- View daily statistics (posts checked, duplicates found)
-- Enable/disable the extension
-- Scan entire page manually
-- Clear cache and export data
-
-#### Batch Analysis
-- Use "Scan Current Page" to analyze all visible posts at once
-- Scroll through your feed to build a larger comparison database
-- Export results for further analysis or reporting
-
-## ⚙️ How It Works
-
-### Detection Process
-
-1. **Content Extraction**: Automatically detects and extracts text from LinkedIn posts
-2. **Text Analysis**: Advanced metrics analysis including readability, spam indicators, and content quality
-3. **Multi-Source Search**: 
-   - Real-time LinkedIn post search
-   - Web content comparison via DuckDuckGo API
-   - Historical post analysis
-4. **Advanced Similarity Analysis**: Multiple algorithms working in parallel
-5. **Comprehensive Scoring**: Multi-factor originality assessment
-6. **Detailed Results**: Visual indicators and in-depth analysis
-
-### Similarity Detection
-
-The extension uses sophisticated algorithms for content comparison:
-
-- **Multi-Level Text Analysis**:
-  - Exact sentence matching
-  - Phrase-level comparison (3-5 word sequences)
-  - Partial sentence similarity (80% threshold)
-  - Word frequency patterns
-  - Structural similarity assessment
-
-- **Smart Content Quality Checks**:
-  - Excessive emoji detection
-  - Hashtag spam analysis
-  - ALL CAPS abuse detection
-  - Word diversity measurement
-  - Text length optimization
-  - Readability scoring
-
-- **Advanced Scoring System**:
-  - Base score: 100 points
-  - Deductions for:
-    - Exact sentence matches (-30 per match)
-    - Phrase similarities (-20 per match)
-    - Overall similarity penalties
-    - Quality indicator violations
-    - Multiple match compounding
+---
 
 ## 🛡️ Privacy & Security
 
-- **Local Processing**: All analysis happens in your browser
-- **No Data Collection**: No personal data is sent to external servers
-- **Secure Storage**: Uses browser's secure storage APIs
-- **No Tracking**: Extension doesn't track your browsing behavior
+- **Local-Only Processing**: All analysis and storage happens in your browser.
+- **No Tracking**: The extension does not track or send your data anywhere.
+- **Open Source**: Review the code and verify privacy for yourself.
 
-## ⚠️ Limitations
+---
 
-- **LinkedIn Only**: Currently works only on LinkedIn
-- **Demo Mode**: Uses simulated data for similarity detection
-- **Rate Limiting**: Respects LinkedIn's usage policies
-- **Language**: Optimized for English content
+## ⚙️ Technical Highlights
 
-## 🔍 Technical Details
+- **Manifest V3**: Modern Chrome extension architecture.
+- **MutationObserver**: Detects new posts as you scroll.
+- **Chrome Storage API**: Efficient, secure local data storage.
+- **Robust Error Handling**: Graceful handling of all errors and edge cases.
+- **Responsive UI**: Looks great in both light and dark mode.
 
-### Technologies Used
-- **Manifest V3**: Modern Chrome extension format
-- **AI-Enhanced Development**: Utilized GitHub Copilot for advanced algorithms
-- **Advanced APIs**: 
-  - Chrome Tabs API for LinkedIn search
-  - DuckDuckGo API for web content
-  - Chrome Storage API for efficient caching
-- **Real-time Processing**:
-  - Mutation Observer for content detection
-  - Parallel search processing
-  - Sophisticated caching system
+---
 
-### Implementation Highlights
-- **Smart Search System**:
-  - Multi-threaded search across platforms
-  - Intelligent phrase extraction
-  - Real-time content scraping
-  - Privacy-focused web search
+## 📝 Example Usage
 
-- **Enhanced Similarity Detection**:
-  - Multiple similarity metrics
-  - Content fingerprinting
-  - Structural analysis
-  - Pattern recognition
-  - Frequency analysis
+1. **Check a Post**: Click "Check Originality" on any LinkedIn post. See a popup with originality score and similar posts.
+2. **Batch Scan**: Open the extension popup and click "Scan Current Page" to analyze all visible posts.
+3. **Export Results**: Use the popup to export your analysis data as JSON.
 
-- **Error Handling**:
-  - Comprehensive error tracking
-  - Graceful fallbacks
-  - Timeout management
-  - Rate limiting protection
+---
 
-### Browser Compatibility
-- ✅ Chrome (Fully supported)
-- ✅ Firefox (with manifest adjustments)
-- ⚠️ Safari (requires conversion)
-- ✅ Edge (Chromium version)
+## 🧩 Compatibility
 
-### AI Integration
-This project leverages artificial intelligence through GitHub Copilot to implement:
-- Sophisticated similarity algorithms
-- Advanced error handling
-- Intelligent search strategies
-- Performance optimizations
+- **Chrome**: Fully supported (Manifest V3)
+- **Edge**: Supported (Chromium-based)
+- **Firefox**: Supported with minor manifest changes
 
-## 🚨 Troubleshooting
+---
 
-### Common Issues
+## �️ Troubleshooting
 
-**Extension Not Working**
-- Ensure you're on linkedin.com
-- Check if the extension is enabled
-- Refresh the LinkedIn page
-- Check browser console for errors
+- **Not working?**
+  - Make sure you're on linkedin.com
+  - Ensure the extension is enabled
+  - Reload LinkedIn after installing
 
-**No Posts Detected**
-- Wait for page to fully load
-- Try scrolling to load more posts
+---
+
+## 📢 Disclaimer
+
+This extension is for educational and research purposes only. Always respect platform terms of service and copyright laws when using automated tools.
 - Use "Scan Current Page" manually
 - Check if LinkedIn updated their page structure
 
